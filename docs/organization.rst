@@ -69,86 +69,97 @@ should get its own pkg-config file.)
 
 The default *src/CMakeLists.txt* file contains skeleton CMake rules for
 building a shared library and installing its corresponding pkg-config
-file.
+file.  This file makes heavy use of some helper macros::
+
+    add_c_library(
+        [name]
+        OUTPUT_NAME [lib_name]
+        PKGCONFIG_NAME [pkgconfig_name]
+        VERSION [lib_version]
+        SOURCES [sources]
+        LIBRARIES [prereqs]
+        LOCAL_LIBRARIES [local_prereqs]
+    )
+
+defines a new library, which can be built either shared or static as requested
+by the person running the build.  ``[name]`` is the local CMake identifier that
+you use in other parts of the build scripts to refer to this library.
+``[lib_name]`` is the "actual" name of the library, as it will be created in the
+local filesystem.  (This should not include any ``lib`` prefix or ``.so``/etc
+suffix.)  ``[pkgconfig_name]`` is the name of the pkgconfig file for this
+library — it should not include the ``.pc`` suffix, and you must have a
+``src/[pkgconfig_name].pc.in`` file which will be used to construct the final
+pkgconfig description.  ``[lib_version]`` is the `library version`_ of the
+library (note that this is **not** the same as the project's version).
+``[sources]`` is a list of the C files that should be compiled to produce this
+library.  ``[prereqs]`` is a list of prerequisite libraries that this library
+should be linked with.  (See below for how to declare which prereqs are
+available in this project.)  ``[local_prereqs]`` are a list of other *local*
+libraries (i.e., those that are a part of this project) that this library should
+be linked with.  (They should already have been defined via another
+``add_c_library`` call.)
+
+.. _library version: http://www.gnu.org/software/libtool/manual/html_node/Updating-version-info.html#Updating-version-info
+
+
+::
+
+    add_c_executable(
+        [name]
+        [SKIP_INSTALL]
+        OUTPUT_NAME [prog_name]
+        SOURCES [sources]
+        LIBRARIES [prereqs]
+        LOCAL_LIBRARIES [local_prereqs]
+    )
+
+defines a new command-line program.  ``[SKIP_INSTALL]``, if given, tells CMake
+not to install the program.  (This is useful if you need it for some
+command-line test cases, for instance.)  All of the other parameters have the
+same meaning as in ``add_c_library``.
+
+
+Both of the above commands have a ``LIBRARIES`` clause that lets you specify
+upstream dependencies that your libraries or programs depend on.  You must
+**declare** each of these dependencies before you can use them when defining
+your libraries and programs.  The prereqs are declared in the "Check for
+prerequisite libraries" section of the top-level *CMakeLists.txt* file.  You
+have a few options available::
+
+    pkgconfig_prereq([name])
+    pkgconfig_prereq([name]>=[version])
+    library_prereq([name])
+
+Ideally, your upstream dependencies will use pkgconfig, in which case you can
+use the ``pkgconfig_prereq`` macro.  This will look for a pkgconfig file with
+the given ``[name]``, and use the contents of that file to tell CMake which
+physically library file to link with.  If you need a particular version, you can
+you the ``>=[version]`` syntax.  In both cases, ``[name]`` is then a valid value
+to use in a ``LIBRARIES`` clause when defining a library or program.
+
+If the upstream library doesn't provide a pkgconfig file, you must use the
+``library_prereq`` macro.  This uses CMake's ``find_library`` command to look
+for a library with the given name, and if it's found, then makes ``[name]``
+available as a valid value to use in a ``LIBRARIES`` clause when defining a
+library or program.
 
 
 Documentation
 -------------
 
-The *docs* directory should contain a collection of reStructuredText
-files that will be used to produce the `Sphinx`_ documentation for your
-project.  The *docs/conf.py* will have been edited when the project was
-:ref:`first created <new-project>`; in most cases, you won't have to
-edit this file any further.  Instead, you'll just create additional
-*.rst* files for each section of documentation, and add an entry to the
-table of contents in *docs/index.rst* for each new *.rst* file.
+The *docs* directory should contain a collection of specially formatted Markdown
+files, which `pandoc`_ will use to create man pages for your project.
 
-.. _Sphinx: http://sphinx.pocoo.org/
+.. _pandoc: http://pandoc.org/
 
-If Sphinx is installed, the Makefiles produced by CMake will
-automatically build the documentation whenever you run ``make`` in the
-build directory.  You can see the built documentation by opening the
-``${BUILD_DIR}/docs/html/index.html`` file.  This lets you preview the
-documentation without having to install the package.
+The default *docs/CMakeLists.txt* file includes comments explaining how to
+define which man pages you've written.  The macros take care of rebuilding the
+man pages if the Markdown source has changed at all.
 
-The Makefile will also automatically install the built documentation
-when you run ``make install``.  The documentation will be placed into
-
-::
-
-    ${PREFIX}/share/doc/${PROJECT_SLUG}
-
-Linking to external documentation sets
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-If you're writing a library that depends on another library that
-provides Sphinx documentation, you can use `Intersphinx`_
-cross-references to add links between the different documentation sets.
-
-.. _Intersphinx: http://sphinx.pocoo.org/latest/ext/intersphinx.html
-
-There are three steps you need to perform to turn on Intersphinx support.
-
-1. Load the Intersphinx extension plugin by adding
-
-   .. code-block:: python
-
-       'sphinx.ext.intersphinx'
-
-   to the ``extensions`` array in *docs/conf.py*.
-
-2. Uncomment and/or edit the ``intersphinx_mapping`` dictionary in
-   *docs/conf.py*.  This is where you define the external Sphinx
-   documentation sets that you want to link to.  For instance, to link
-   with `libcork`_\ 's documentation, you would add:
-
-   .. code-block:: python
-
-      intersphinx_mapping = {
-          'libcork': ('http://libcork.readthedocs.org/en/latest/', None),
-      }
-
-   The ``'libcork'`` part is the short name that you'll use in your
-   Intersphinx references to refer to the external documentation set.
-   The URL is the default location of the external documentation.  (For
-   private projects, this doesn't have to be a publicly available URL;
-   it just needs to be a URL that will be available to anyone who is
-   allowed to download and build this project.)
-
-3. Update *docs/CMakeLists.txt* to call the ``find_prereq_doc`` helper
-   macro for each external documentation set you want to link to.
-   (Search for the comment that begins “If your Sphinx documentation
-   references” to find where to call the macros.)  The parameter to the
-   macro should be the name of the pkg-config file for the library whose
-   documentation you're linking to.
-
-Together, these three steps let you refer to external documentation.  If
-there is a local copy of the library (and its documentation) installed,
-the links will point to the local copy.  If not, the links will fall
-back on the publicly available copy at the URL provided in your
-``intersphinx_mapping`` dictionary.  (The local copy of the
-documentation is pointed to by the ``sphinxdir`` variable in each
-pkg-config file produced by the template.)
+The resulting man pages are also checked into the git repository, so that you
+only need to install `pandoc`_ if you edit the Markdown source.  If you haven't
+done that, the CMake build scripts will install the existing compiled man pages
+at install time.
 
 
 Tests
@@ -169,15 +180,12 @@ Library tests
 ~~~~~~~~~~~~~
 
 To write a library test, you create a new :file:`test-{something}.c`
-file in the *tests* directory, and add a call to the ``make_test`` macro
-in *tests/CMakeLists.txt*.  The default template links these test
-programs with the ``check`` library; you should make sure the
-``target_link_libraries`` call in the macro definition also links in to
-any libraries in your project, as well as any other third-party
-libraries needed by the test case.  (You shouldn't need to explicitly
-mention third-party libraries needed by the project's library; CMake
-will automatically include any transitive dependencies that it can
-determine.)
+file in the *tests* directory, and add a call to the ``add_c_test`` macro
+in *tests/CMakeLists.txt*.  The default template links these test programs with
+the ``check`` library, and with any library that's part of your project.  (You
+shouldn't need to explicitly mention third-party libraries needed by the
+project's libraries; CMake will automatically include any transitive
+dependencies that it can determine.)
 
 With these definitions in place, the ``make test`` target in your
 project's Makefile will automatically run each of the test programs that
@@ -198,71 +206,8 @@ Command-line tests
 You can also write test cases that execute an arbitrary command, and
 verify the contents of its stdout and stderr streams.  (You can also
 provide an arbitrary stdin stream that will be passed in to the
-program.)
+program.)  We use `cram`_ for these; the default CMake build scripts will
+automatically find any ``*.t`` files in the *tests* directory, and use `cram`_
+to run those as part of ``make test``.
 
-Each test case is defined by a subdirectory of the project's *tests*
-directory.  Test case subdirectories can be nested; this lets you
-group several related test cases together.   A common pattern is that
-you'll have a :file:`tests/{something}` directory for a particular
-program (or a particular set of options for a program), and separate
-test case subdirectories underneath that for a variety of inputs.
-
-Any subdirectory that contains a file named *command* is considered to
-be a test case directory.  Each test case directory should define the
-following files:
-
-*command*
-   The command that should be run to perform the test.  This can be an
-   arbitrary shell command, including pipes and redirections.  It will
-   be executed by the Bourne shell (*/bin/sh*).
-
-*in*
-   If present, the contents of this file will be passed into the command
-   on stdin.  This file is optional; if you don't provide one, then
-   we'll hook */dev/null* up to the command's stdin.
-
-*out*
-   If present, we'll verify that the stdout stream of the command
-   matches the contents of this file.  Only an exact match is considered
-   successful.
-
-*err*
-   If present, we'll verify that the stderr stream of the command
-   matches the contents of this file.  Only an exact match is considered
-   successful.
-
-These test subdirectories are automatically found by the template's
-CMake scripts; you don't need to edit *tests/CMakeLists.txt* when you
-add a new command-line test case.  The ``make test`` target will
-automatically run the test case for each test case directory that CMake
-can find.
-
-If you need to construct paths to test data files in the repository, you
-can use relative paths: the test cases will be run from the top-level
-build directory, and we assume that this will be a direct subdirectory
-of your top-level source directory.
-
-If you see that a particular test fails, you can run it directly using
-the ``run-test`` script.  (This is the same script that CMake uses in
-the test harness.)  You run this script from within your top-level build
-directory.  It's usage is::
-
-    $ ./run-test ${PATH_TO_TEST_DIRECTORY}
-
-(``PATH_TO_TEST_DIRECTORY`` will be something like
-``../tests/test-case-1``, since you'll be running the script from within
-the build directory, while the test case is defined in the the source
-directory.)  ``run-test`` will display a diff of the actual and expected
-stdout and stderr streams, which should help you debug the test case.
-
-When you create a new test case, or if you need to update the expected
-stdout or stderr for an existing test case, you can use the ``train``
-script.  Like ``run-test``, you run this from your build directory::
-
-    $ ./train ${PATH_TO_TEST_DIRECTORY}
-
-This runs your test case, just like ``run-test`` would, but instead of
-verifying the stdout and stderr streams, it assumes that the current
-output is correct.  It will collect the stdout and stderr for you, and
-save it into the appropriate *out* and *err* files in the souce test
-case directory.
+.. _cram: https://pypi.python.org/pypi/cram

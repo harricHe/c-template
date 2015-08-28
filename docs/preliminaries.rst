@@ -82,25 +82,18 @@ Documentation
 ~~~~~~~~~~~~~
 
 You're going to document your code right?  Good.  We're assuming that
-you're going to use `Sphinx`_ to do so.  (That's what was used to
-produce the documentation you're reading, for instance.)  We chose
-Sphinx because it has the best cross-language support of the various
-tools we looked at.
+you're going to use `pandoc`_ to write man pages.
 
-.. _Sphinx: http://sphinx.pocoo.org/
+.. _pandoc: http://pandoc.org/
 
-Sphinx is *not* available in `Homebrew`_, unfortunately.  You should be
-easy to ``easy_install`` it, however::
+Sphinx is available in `Homebrew`_, so installing it should just require::
 
-    $ easy_install -U Sphinx
-
-(It's also possible to use a more complex setup using ``pip`` and
-``virtualenv``, but this is left as an exercise for the reader.)
+    $ brew install pandoc
 
 Third-party libraries
 ~~~~~~~~~~~~~~~~~~~~~
 
-Many of the librarys and programs that we've built using this template
+Many of the libraries and programs that we've built using this template
 use `libcork`_ as a basic cross-platform C library.  You can do this as
 well, though its use is completely optional.
 
